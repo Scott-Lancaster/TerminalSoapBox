@@ -56,6 +56,13 @@ Key highlights:
   4. Other dependencies as needed (e.g., `cryptography`, `websocket-client`)
 - **Twitter Developer** credentials for read-write access (API Key, Secret, Access Token, Access Secret).
 
+##Bonus Setup
+- If you want to create a shortcut so you can just type "tweet 'Hello world'", the steps are below.
+      echo '#!/bin/bash' > ~/tweet
+      echo 'python3 /path_to/post_message.py --twitter "$@"' >> ~/tweet
+      chmod +x ~/tweet 
+- repeat for nostr, both, or other protocols that are added.
+
 ### Installation
 1. **Clone or copy** the `post_message.py` script into your project directory.  
 2. **Install** required Python libraries:
