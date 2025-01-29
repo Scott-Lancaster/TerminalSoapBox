@@ -56,7 +56,7 @@ Key highlights:
   4. Other dependencies as needed (e.g., `cryptography`, `websocket-client`)
 - **Twitter Developer** credentials for read-write access (API Key, Secret, Access Token, Access Secret).
 
-##Bonus Setup
+## Bonus Setup
 - If you want to create a shortcut so you can just type "tweet 'Hello world'", the steps are below.
       echo '#!/bin/bash' > ~/tweet
       echo 'python3 /path_to/post_message.py --twitter "$@"' >> ~/tweet
