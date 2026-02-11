@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import os
 import subprocess
 import sys
@@ -7,22 +8,18 @@ import yaml
 import tweepy
 from tweepy.errors import TweepyException
 
-from nostr.key import PrivateKey
-from nostr.event import Event
-from nostr.relay import Relay
+from nostr_sdk import Client, Keys, NostrSigner, EventBuilder, RelayUrl
 
 
 def decrypt_config(encrypted_file, decrypted_file):
     """
-    Decrypts an encrypted YAML file using GPG silently.
-    Suppresses gpg's usual output, only prints if there's an error.
+    Decrypts an encrypted YAML file using GPG.
+    Allows passphrase prompt to appear.
     """
     try:
         subprocess.run(
-            ['gpg', '--decrypt', '--output', decrypted_file, encrypted_file],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            ['gpg', '--quiet', '--decrypt', '--output', decrypted_file, encrypted_file],
+            check=True
         )
     except subprocess.CalledProcessError as e:
         print(f"Error decrypting file: {e}")
@@ -41,7 +38,7 @@ def load_config(file_path):
         sys.exit(1)
 
 def post_to_twitter(api_key, api_secret_key, access_token, access_secret, message):
-    """Posts a message to Twitter using Tweepy’s API v2 Client."""
+    """Posts a message to Twitter/X using Tweepy’s API v2 Client."""
     try:
         client = tweepy.Client(
             consumer_key=api_key,
@@ -60,40 +57,59 @@ def post_to_twitter(api_key, api_secret_key, access_token, access_secret, messag
     except Exception as e:
         print(f"Unexpected error posting to Twitter: {e}")
 
-def post_to_nostr(nsec_key, message):
-    """Posts a message to Nostr using Jeff Thibault’s nostr library."""
+async def post_to_nostr_async(nsec_key, message):
+    """Asynchronous function to post a message to Nostr using nostr-sdk."""
     try:
-        # 1) Decode your nsec key
-        sk = PrivateKey.from_nsec(nsec_key)
-        pubkey_hex = sk.public_key.hex()
-
-        # 2) Now pass 'message' as the second argument (content), 
-        #    and kind (1) as the third argument if you want a text note
-        event = Event(
-            pubkey_hex,  # public_key (1st arg)
-            message,     # content (2nd arg, must be a str)
-            1            # kind = 1 (3rd arg)
-        )
-
-        # 3) Sign and publish
-        sk.sign_event(event)
-        with Relay("wss://relay.primal.net") as relay:
-            relay.publish(event)
-
+        # Parse keys from nsec private key string
+        keys = Keys.parse(nsec_key)
+        
+        # Create signer and client
+        signer = NostrSigner.keys(keys)
+        client = Client(signer)
+        
+        # Add multiple relays for better propagation
+        relays = [
+            "wss://relay.damus.io",
+            "wss://nos.lol",
+            "wss://relay.snort.social"
+        ]
+        for url_str in relays:
+            relay_url = RelayUrl.parse(url_str)
+            await client.add_relay(relay_url)
+        
+        # Connect to relays
+        await client.connect()
+        
+        # Build and send the text note event (kind 1)
+        builder = EventBuilder.text_note(message)
+        event_id = await client.send_event_builder(builder)
+        
         print("Message posted to Nostr successfully!")
+        print(f"Event ID: {event_id.id.to_bech32()}")  # Bech32 format (e.g., note1...)
+        
     except Exception as e:
         print(f"Error posting to Nostr: {e}")
+    finally:
+        # Always disconnect cleanly
+        try:
+            await client.disconnect()
+        except:
+            pass
+
+def post_to_nostr(nsec_key, message):
+    """Synchronous wrapper for posting to Nostr."""
+    asyncio.run(post_to_nostr_async(nsec_key, message))
 
 
 if __name__ == "__main__":
-    # 1. Parse command-line arguments
+    # Parse command-line arguments
     parser = argparse.ArgumentParser(
-        description="Post a message to Twitter, Nostr, or both."
+        description="Post a message to Twitter/X, Nostr, or both."
     )
     parser.add_argument(
         "--twitter",
         action="store_true",
-        help="Post to Twitter only."
+        help="Post to Twitter/X only."
     )
     parser.add_argument(
         "--nostr",
@@ -108,26 +124,33 @@ if __name__ == "__main__":
     args = parser.parse_args()
     message = " ".join(args.message)
 
-    # 2. Decrypt the YAML config
-    ENCRYPTED_CONFIG_PATH = "config.yaml.gpg"
-    DECRYPTED_CONFIG_PATH = "config.yaml"
+    # Set absolute paths based on the script's location
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+    ENCRYPTED_CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.yaml.gpg")
+    DECRYPTED_CONFIG_PATH = os.path.join(SCRIPT_DIR, "config.yaml")
 
+    # Check if encrypted config file exists
+    if not os.path.exists(ENCRYPTED_CONFIG_PATH):
+        print(f"Error: Encrypted config file not found at {ENCRYPTED_CONFIG_PATH}")
+        sys.exit(1)
+
+    # Decrypt the YAML config
     decrypt_config(ENCRYPTED_CONFIG_PATH, DECRYPTED_CONFIG_PATH)
 
-    # 3. Load credentials from the decrypted config
+    # Load credentials from the decrypted config
     config = load_config(DECRYPTED_CONFIG_PATH)
 
-    # 4. Safely remove the decrypted file
+    # Safely remove the decrypted file
     try:
         os.remove(DECRYPTED_CONFIG_PATH)
     except Exception as e:
         print(f"Error removing decrypted file: {e}")
 
-    # 5. Extract nested dicts
+    # Extract nested configs
     twitter_config = config.get('twitter', {})
     nostr_config = config.get('nostr', {})
 
-    # 6. Post to Twitter if --twitter is used or no flags are passed
+    # Post to Twitter/X if --twitter is used or no flags are passed
     if args.twitter or (not args.twitter and not args.nostr):
         post_to_twitter(
             twitter_config.get('api_key'),
@@ -137,7 +160,7 @@ if __name__ == "__main__":
             message
         )
 
-    # 7. Post to Nostr if --nostr is used or no flags are passed
+    # Post to Nostr if --nostr is used or no flags are passed
     if args.nostr or (not args.twitter and not args.nostr):
         post_to_nostr(
             nostr_config.get('private_key'),
