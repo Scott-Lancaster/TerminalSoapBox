@@ -1,0 +1,63 @@
+Step 1: Create Shell Scripts
+For Twitter:
+Open Terminal.
+Create a new script file for Twitter:
+sh
+echo '#!/bin/bash' > ~/tweet
+echo 'python3 /path/to/post_message.py --twitter "$@"' >> ~/tweet
+chmod +x ~/tweet
+
+Change /path/to/post_message.py to the actual path to your Python script.
+For Nostr:
+Similarly, for Nostr:
+sh
+echo '#!/bin/bash' > ~/nstr
+echo 'python3 /path/to/post_message.py --nostr "$@"' >> ~/nstr
+chmod +x ~/nstr
+
+Again, replace the path with the actual path to your script.
+
+For Both Twitter and Nostr:
+Create a script for posting to both:
+sh
+echo '#!/bin/bash' > ~/post
+echo 'python3 /path/to/post_message.py "$@"' >> ~/post
+chmod +x ~/post
+
+This script doesn't need to specify --twitter or --nostr because, based on how you've structured your Python script, not specifying either will post to both.
+
+Step 2: Move Scripts to a Directory in Your PATH
+Move these scripts to a directory that's already in your PATH or add the directory to your PATH. Common directories include /usr/local/bin or /usr/bin (you'll need sudo for these):
+sh
+sudo mv ~/tweet /usr/local/bin/
+sudo mv ~/nstr /usr/local/bin/
+sudo mv ~/post /usr/local/bin/
+
+Step 3: Verify or Update PATH
+If you've chosen a directory not typically in your PATH, you'll need to add it:
+Open your shell configuration file (like .bashrc, .bash_profile, or .zshrc if you're using zsh) with:
+sh
+nano ~/.zshrc  # or ~/.bashrc, ~/.bash_profile, etc.
+Add the following line if it's not already in your PATH:
+sh
+export PATH=$PATH:/path/to/your/scripts/
+Save and exit (for nano, press Ctrl+X, then Y, then Enter).
+Source your profile to update your current session:
+sh
+source ~/.zshrc  # or whatever file you edited
+
+
+
+
+
+echo '#!/bin/bash' > ~/tweet
+echo 'python3 /path_to/post_message.py --twitter "$@"' >> ~/tweet
+chmod +x ~/tweet
+
+echo '#!/bin/bash' > ~/nostr
+echo 'python3 //path_to/post_message.py --nostr "$@"' >> ~/nostr
+chmod +x ~/nostr
+
+echo '#!/bin/bash' > ~/post
+echo 'python3 /path_to/post_message.py "$@"' >> ~/post
+chmod +x ~/post
